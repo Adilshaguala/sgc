@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils"
 const mainNavItems = [
   {
     title: "Dashboard",
-    href: "/",
+    href: "/dashboard",
     icon: LayoutDashboard,
   },
   {
@@ -121,7 +121,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.href || (item.href === "/dashboard" && pathname === "/")}
                   >
                     <Link href={item.href}>
                       <item.icon className="h-4 w-4" />

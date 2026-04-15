@@ -34,9 +34,11 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { ArrowLeft, Download, ArrowRight, Pencil, FileText, User, BookOpen, Calculator } from "lucide-react"
+import { ArrowLeft, ArrowRight, Pencil, FileText, User, BookOpen, Calculator } from "lucide-react"
 import Link from "next/link"
 import type { EstadoContrato } from "@/types"
+import { PdfDownloadButton } from "@/components/contracts/pdf-download-button"
+import type { ContractPdfData } from "@/lib/pdf/contract-pdf"
 
 // Mock data
 const mockContrato = {
@@ -117,6 +119,41 @@ export default function ContratoDetalhePage() {
   const proximoEstado = estadoTransicoes[contrato.estado]
   const bonusConectividade = contrato.valor_total_bruto * 0.25
 
+  // Prepare PDF data
+  const pdfData: ContractPdfData = {
+    numeroProcesso: contrato.numero_processo,
+    nomeInstituicao: "Universidade Pedagogica de Maputo",
+    endereco: "Rua Joao Carlos Raposo Beirao no 135, Caixa Postal 3276, Tel.: 21320860/2, Fax no 21322113 Maputo-Mocambique",
+    numeroDespacho: "60/GR/UP-MAPUTO/010/2025",
+    contratanteTitulo: contrato.assinante.titulo || "",
+    contratanteNome: contrato.assinante.nome_completo,
+    contratanteCargo: contrato.assinante.cargo,
+    docenteNome: contrato.docente.nome_completo,
+    docenteBI: contrato.docente.bi_numero || "",
+    docenteNUIT: contrato.docente.nuit || "",
+    docenteNacionalidade: contrato.docente.nacionalidade,
+    docenteCategoria: contrato.docente.categoria || "",
+    docenteNivelAcademico: contrato.docente.nivel_academico === "mestre" ? "Mestre" : 
+                          contrato.docente.nivel_academico === "doutorado" ? "Doutorado" : "Licenciado",
+    anoLectivo: contrato.ano_lectivo,
+    dataContrato: contrato.data_contrato,
+    semestre: "I e II",
+    modulos: contrato.cadeiras.map((cc) => ({
+      nome: cc.cadeira.nome,
+      horasContacto: cc.horas_override || cc.cadeira.horas_contacto,
+      curso: cc.cadeira.curso,
+      ano: `${cc.cadeira.ano}o`,
+      semestre: cc.cadeira.semestre,
+      centroRecursos: cc.centro_recursos.nome,
+    })),
+    totalHoras: contrato.total_horas,
+    valorHora: contrato.valor_hora_mt,
+    bonusConectividadePct: 25,
+    abonoDiaSemPernoita: 1800,
+    abonoDiaComPernoita: 6000,
+    clausulas: [],
+  }
+
   const handleChangeState = () => {
     // Handle state change
     setChangeStateOpen(false)
@@ -144,10 +181,7 @@ export default function ContratoDetalhePage() {
             </Button>
           )}
           {contrato.estado !== "rascunho" && (
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Gerar PDF
-            </Button>
+            <PdfDownloadButton contractData={pdfData} />
           )}
           {proximoEstado && (
             <Dialog open={changeStateOpen} onOpenChange={setChangeStateOpen}>
