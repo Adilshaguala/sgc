@@ -37,8 +37,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { ArrowLeft, ArrowRight, Pencil, FileText, User, BookOpen, Calculator } from "lucide-react"
 import Link from "next/link"
 import type { EstadoContrato } from "@/types"
-import { PdfDownloadButton } from "@/components/contracts/pdf-download-button"
-import type { ContractPdfData } from "@/lib/pdf/contract-pdf"
+import { PdfDownloadButton, type ContractPdfData } from "@/components/contracts/pdf-download-button"
 
 // Mock data
 const mockContrato = {
@@ -151,7 +150,7 @@ export default function ContratoDetalhePage() {
     bonusConectividadePct: 25,
     abonoDiaSemPernoita: 1800,
     abonoDiaComPernoita: 6000,
-    clausulas: [],
+    logoUrl: "/images/upm-logo.jpg",
   }
 
   const handleChangeState = () => {

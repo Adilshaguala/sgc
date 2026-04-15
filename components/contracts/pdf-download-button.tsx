@@ -11,8 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { pdf } from "@react-pdf/renderer"
-import { ContractPdfDocument, type ContractPdfData } from "@/lib/pdf/contract-pdf"
+import { generateContractPdf, type ContractPdfData } from "@/lib/pdf/contract-pdf-generator"
 
 interface PdfDownloadButtonProps {
   contractData: ContractPdfData
@@ -29,32 +28,37 @@ export function PdfDownloadButton({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
 
-  const generatePdf = async () => {
+  const handleDownload = async () => {
     setIsGenerating(true)
     try {
-      const blob = await pdf(<ContractPdfDocument data={contractData} />).toBlob()
+      const blob = await generateContractPdf(contractData)
       const url = URL.createObjectURL(blob)
-      return url
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `Contrato_${contractData.numeroProcesso.replace(/\//g, "_")}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("[v0] Error generating PDF:", error)
     } finally {
       setIsGenerating(false)
     }
   }
 
-  const handleDownload = async () => {
-    const url = await generatePdf()
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `Contrato_${contractData.numeroProcesso.replace(/\//g, "_")}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
-
   const handlePreview = async () => {
-    const url = await generatePdf()
-    setPdfUrl(url)
-    setPreviewOpen(true)
+    setIsGenerating(true)
+    try {
+      const blob = await generateContractPdf(contractData)
+      const url = URL.createObjectURL(blob)
+      setPdfUrl(url)
+      setPreviewOpen(true)
+    } catch (error) {
+      console.error("[v0] Error generating PDF preview:", error)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const closePreview = () => {
@@ -103,11 +107,11 @@ export function PdfDownloadButton({
             {contractData.numeroProcesso} - {contractData.docenteNome}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 h-full">
           {pdfUrl && (
             <iframe
               src={pdfUrl}
-              className="w-full h-full rounded-md border"
+              className="w-full h-[calc(90vh-100px)] rounded-md border"
               title="PDF Preview"
             />
           )}
@@ -116,3 +120,5 @@ export function PdfDownloadButton({
     </Dialog>
   )
 }
+
+export type { ContractPdfData }
