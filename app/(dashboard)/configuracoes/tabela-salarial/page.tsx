@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/page-header"
 import { NivelBadge } from "@/components/shared/status-badge"
 import { MoneyDisplay } from "@/components/shared/money-display"
@@ -16,61 +17,108 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Save, Info, DollarSign } from "lucide-react"
-import type { NivelAcademico } from "@/types"
-
-interface TabelaSalario {
-  id: string
-  nivel_academico: NivelAcademico
-  valor_hora_mt: number
-  bonus_conectividade_pct: number
-  abono_dia_sem_pernoita: number
-  abono_dia_com_pernoita: number
-}
-
-const initialData: TabelaSalario[] = [
-  {
-    id: "1",
-    nivel_academico: "licenciado",
-    valor_hora_mt: 900,
-    bonus_conectividade_pct: 25,
-    abono_dia_sem_pernoita: 1800,
-    abono_dia_com_pernoita: 6000,
-  },
-  {
-    id: "2",
-    nivel_academico: "mestre",
-    valor_hora_mt: 1100,
-    bonus_conectividade_pct: 25,
-    abono_dia_sem_pernoita: 1800,
-    abono_dia_com_pernoita: 6000,
-  },
-  {
-    id: "3",
-    nivel_academico: "doutorado",
-    valor_hora_mt: 1400,
-    bonus_conectividade_pct: 25,
-    abono_dia_sem_pernoita: 1800,
-    abono_dia_com_pernoita: 6000,
-  },
-]
+import { Save, Info, DollarSign, Trash2 } from "lucide-react"
+import type { TabelaSalario } from "@/types"
 
 export default function TabelaSalarialPage() {
-  const [data, setData] = useState(initialData)
+  const [data, setData] = useState<TabelaSalario[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadTabela() {
+      setIsLoading(true)
+      try {
+        const response = await fetch("/api/tabela-salarial")
+        if (!response.ok) {
+          throw new Error("Falha ao carregar a tabela salarial.")
+        }
+        const result: TabelaSalario[] = await response.json()
+        setData(result)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Falha ao carregar a tabela salarial.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadTabela()
+  }, [])
 
   const handleChange = (id: string, field: keyof TabelaSalario, value: string) => {
-    setData(
-      data.map((item) =>
-        item.id === id ? { ...item, [field]: parseFloat(value) || 0 } : item
+    setData((current) =>
+      current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              [field]: Number.isNaN(Number(value)) ? 0 : Number(value),
+            }
+          : item
       )
     )
   }
 
   const handleSave = async () => {
+    if (data.length === 0) {
+      toast.error("Nenhuma entrada para guardar.")
+      return
+    }
+
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
+
+    try {
+      const updatedData = await Promise.all(
+        data.map(async (item) => {
+          const response = await fetch(`/api/tabela-salarial/${item.id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              valor_hora_mt: item.valor_hora_mt,
+              bonus_conectividade_pct: item.bonus_conectividade_pct,
+              abono_dia_sem_pernoita: item.abono_dia_sem_pernoita,
+              abono_dia_com_pernoita: item.abono_dia_com_pernoita,
+            }),
+          })
+
+          const result = await response.json()
+          if (!response.ok) {
+            throw new Error(result.error || "Falha ao guardar valor salarial.")
+          }
+
+          return result as TabelaSalario
+        })
+      )
+
+      setData(updatedData)
+      toast.success("Tabela salarial actualizada com sucesso.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao guardar tabela salarial.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (item: TabelaSalario) => {
+    if (!confirm(`Tem certeza que deseja excluir a entrada "${item.nivel_academico}"?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/tabela-salarial/${item.id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error("Falha ao excluir entrada da tabela salarial.")
+      }
+
+      setData((current) => current.filter((entry) => entry.id !== item.id))
+      toast.success("Entrada excluida com sucesso.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao excluir entrada da tabela salarial.")
+    }
   }
 
   return (
@@ -79,7 +127,7 @@ export default function TabelaSalarialPage() {
         title="Tabela Salarial"
         description="Configuracao dos valores de remuneracao por nivel academico"
       >
-        <Button onClick={handleSave} disabled={isSubmitting}>
+        <Button onClick={handleSave} disabled={isSubmitting || isLoading}>
           <Save className="mr-2 h-4 w-4" />
           {isSubmitting ? "A guardar..." : "Guardar Alteracoes"}
         </Button>
@@ -114,57 +162,81 @@ export default function TabelaSalarialPage() {
                 <TableHead className="text-right">Bonus Conectividade (%)</TableHead>
                 <TableHead className="text-right">Abono Dia s/ Pernoita (MT)</TableHead>
                 <TableHead className="text-right">Abono Dia c/ Pernoita (MT)</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <NivelBadge nivel={item.nivel_academico} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      value={item.valor_hora_mt}
-                      onChange={(e) => handleChange(item.id, "valor_hora_mt", e.target.value)}
-                      className="w-32 text-right ml-auto"
-                      step="0.01"
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      value={item.bonus_conectividade_pct}
-                      onChange={(e) => handleChange(item.id, "bonus_conectividade_pct", e.target.value)}
-                      className="w-24 text-right ml-auto"
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      value={item.abono_dia_sem_pernoita}
-                      onChange={(e) => handleChange(item.id, "abono_dia_sem_pernoita", e.target.value)}
-                      className="w-32 text-right ml-auto"
-                      step="0.01"
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      value={item.abono_dia_com_pernoita}
-                      onChange={(e) => handleChange(item.id, "abono_dia_com_pernoita", e.target.value)}
-                      className="w-32 text-right ml-auto"
-                      step="0.01"
-                    />
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    A carregar tabela salarial...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    Nenhuma entrada encontrada.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <NivelBadge nivel={item.nivel_academico} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        value={item.valor_hora_mt}
+                        onChange={(e) => handleChange(item.id, "valor_hora_mt", e.target.value)}
+                        className="w-32 text-right ml-auto"
+                        step="0.01"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        value={item.bonus_conectividade_pct}
+                        onChange={(e) => handleChange(item.id, "bonus_conectividade_pct", e.target.value)}
+                        className="w-24 text-right ml-auto"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        value={item.abono_dia_sem_pernoita}
+                        onChange={(e) => handleChange(item.id, "abono_dia_sem_pernoita", e.target.value)}
+                        className="w-32 text-right ml-auto"
+                        step="0.01"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        value={item.abono_dia_com_pernoita}
+                        onChange={(e) => handleChange(item.id, "abono_dia_com_pernoita", e.target.value)}
+                        className="w-32 text-right ml-auto"
+                        step="0.01"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(item)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Summary Card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumo dos Valores Actuais</CardTitle>

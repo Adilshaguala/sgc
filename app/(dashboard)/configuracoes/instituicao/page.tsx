@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,30 +14,85 @@ import {
   FieldDescription,
 } from "@/components/ui/field"
 import { Save, Upload, Building2 } from "lucide-react"
+import type { Instituicao } from "@/types"
+
+const initialFormData = {
+  nome: "",
+  endereco: "",
+  telefone: "",
+  fax: "",
+  numero_despacho: "",
+}
 
 export default function InstituicaoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
-    nome: "Universidade Pedagogica de Maputo",
-    endereco: "Av. do Trabalho, Parcela 14/103, Lhanguene, Maputo",
-    telefone: "+258 21 401078/82",
-    fax: "+258 21 401082",
-    numero_despacho: "105/GR/2023",
-  })
+  const [formData, setFormData] = useState(initialFormData)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadInstituicao() {
+      setIsLoading(true)
+      try {
+        const response = await fetch("/api/instituicao")
+        if (!response.ok) {
+          throw new Error("Falha ao carregar os dados da instituicao.")
+        }
+        const data: Instituicao | null = await response.json()
+        if (data) {
+          setFormData({
+            nome: data.nome || "",
+            endereco: data.endereco || "",
+            telefone: data.telefone || "",
+            fax: data.fax || "",
+            numero_despacho: data.numero_despacho || "",
+          })
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Falha ao carregar instituicao.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadInstituicao()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
+
+    try {
+      const response = await fetch("/api/instituicao", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao guardar instituicao.")
+      }
+
+      toast.success("Dados da instituicao actualizados com sucesso.")
+      setFormData({
+        nome: result.nome || "",
+        endereco: result.endereco || "",
+        telefone: result.telefone || "",
+        fax: result.fax || "",
+        numero_despacho: result.numero_despacho || "",
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao guardar instituicao.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Instituicao"
-        description="Configuracoes gerais da instituicao"
-      />
+      <PageHeader title="Instituicao" description="Configuracoes gerais da instituicao" />
 
       <form onSubmit={handleSubmit}>
         <Card>
@@ -57,9 +113,7 @@ export default function InstituicaoPage() {
                 <FieldLabel>Nome da Instituicao *</FieldLabel>
                 <Input
                   value={formData.nome}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nome: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                   placeholder="Nome completo da instituicao"
                   required
                 />
@@ -87,9 +141,7 @@ export default function InstituicaoPage() {
                 <FieldLabel>Endereco</FieldLabel>
                 <Textarea
                   value={formData.endereco}
-                  onChange={(e) =>
-                    setFormData({ ...formData, endereco: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, endereco: e.target.value })}
                   placeholder="Endereco completo da instituicao"
                   rows={2}
                 />
@@ -99,9 +151,7 @@ export default function InstituicaoPage() {
                 <FieldLabel>Telefone</FieldLabel>
                 <Input
                   value={formData.telefone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefone: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                   placeholder="+258 21 000000"
                 />
               </Field>
@@ -110,9 +160,7 @@ export default function InstituicaoPage() {
                 <FieldLabel>Fax</FieldLabel>
                 <Input
                   value={formData.fax}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fax: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
                   placeholder="+258 21 000000"
                 />
               </Field>
@@ -121,9 +169,7 @@ export default function InstituicaoPage() {
                 <FieldLabel>Numero do Despacho</FieldLabel>
                 <Input
                   value={formData.numero_despacho}
-                  onChange={(e) =>
-                    setFormData({ ...formData, numero_despacho: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, numero_despacho: e.target.value })}
                   placeholder="Ex: 105/GR/2023"
                 />
                 <FieldDescription>
@@ -133,7 +179,7 @@ export default function InstituicaoPage() {
             </FieldGroup>
 
             <div className="mt-8 flex justify-end">
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || isLoading}>
                 <Save className="mr-2 h-4 w-4" />
                 {isSubmitting ? "A guardar..." : "Guardar Alteracoes"}
               </Button>

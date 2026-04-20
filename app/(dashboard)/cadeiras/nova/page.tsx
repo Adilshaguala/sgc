@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/field"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
+import type { Curso } from "@/types"
 
 export default function NovaCadeiraPage() {
   const router = useRouter()
@@ -28,17 +30,72 @@ export default function NovaCadeiraPage() {
   const [formData, setFormData] = useState({
     nome: "",
     horas_contacto: "",
-    curso: "",
+    curso_id: "",
     ano: "",
     semestre: "",
   })
+  const [cursos, setCursos] = useState<Curso[]>([])
+
+  useEffect(() => {
+    loadCursos()
+  }, [])
+
+  const loadCursos = async () => {
+    try {
+      const response = await fetch("/api/cursos")
+      if (!response.ok) {
+        throw new Error("Falha ao carregar cursos.")
+      }
+      const cursosData = await response.json()
+      setCursos(cursosData)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao carregar cursos.")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.nome.trim() || !formData.curso_id || !formData.ano || !formData.semestre) {
+      toast.error("Preencha todos os campos obrigatorios.")
+      return
+    }
+
+    if (!formData.horas_contacto || Number(formData.horas_contacto) <= 0) {
+      toast.error("Horas de contacto devem ser maior que 0.")
+      return
+    }
+
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
-    router.push("/cadeiras")
+
+    try {
+      const response = await fetch("/api/cadeiras", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nome: formData.nome.trim(),
+          horas_contacto: Number(formData.horas_contacto),
+          curso_id: formData.curso_id,
+          ano: Number(formData.ano),
+          semestre: formData.semestre as "I" | "II" | "I e II",
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao criar cadeira.")
+      }
+
+      toast.success("Cadeira criada com sucesso.")
+      router.push("/cadeiras")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao criar cadeira.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -95,14 +152,24 @@ export default function NovaCadeiraPage() {
 
               <Field>
                 <FieldLabel>Curso *</FieldLabel>
-                <Input
-                  value={formData.curso}
-                  onChange={(e) =>
-                    setFormData({ ...formData, curso: e.target.value })
+                <Select
+                  value={formData.curso_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, curso_id: value })
                   }
-                  placeholder="Ex: Licenciatura em Informatica"
                   required
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione um curso" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cursos.map((curso) => (
+                      <SelectItem key={curso.id} value={curso.id}>
+                        {curso.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
 
               <Field>

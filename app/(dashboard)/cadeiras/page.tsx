@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,72 +21,51 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
 import { Plus, Search, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
 import type { Cadeira } from "@/types"
 import Link from "next/link"
 
-// Mock data
-const mockCadeiras: Cadeira[] = [
-  {
-    id: "1",
-    nome: "Introducao a Programacao",
-    horas_contacto: 64,
-    curso: "Licenciatura em Informatica",
-    ano: 1,
-    semestre: "I",
-    created_at: "2025-01-15",
-  },
-  {
-    id: "2",
-    nome: "Estruturas de Dados",
-    horas_contacto: 48,
-    curso: "Licenciatura em Informatica",
-    ano: 2,
-    semestre: "I",
-    created_at: "2025-01-15",
-  },
-  {
-    id: "3",
-    nome: "Programacao Web",
-    horas_contacto: 64,
-    curso: "Licenciatura em Informatica",
-    ano: 3,
-    semestre: "II",
-    created_at: "2025-01-15",
-  },
-  {
-    id: "4",
-    nome: "Didactica Geral",
-    horas_contacto: 48,
-    curso: "Licenciatura em Educacao",
-    ano: 1,
-    semestre: "I e II",
-    created_at: "2025-01-15",
-  },
-  {
-    id: "5",
-    nome: "Psicologia do Desenvolvimento",
-    horas_contacto: 64,
-    curso: "Licenciatura em Psicologia",
-    ano: 2,
-    semestre: "I",
-    created_at: "2025-01-15",
-  },
-  {
-    id: "6",
-    nome: "Base de Dados",
-    horas_contacto: 48,
-    curso: "Licenciatura em Informatica",
-    ano: 2,
-    semestre: "II",
-    created_at: "2025-01-15",
-  },
-]
-
 export default function CadeirasPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [cadeiras, setCadeiras] = useState<Cadeira[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredCadeiras = mockCadeiras.filter(
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCadeiras() {
+      try {
+        const response = await fetch("/api/cadeiras")
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Falha ao carregar cadeiras.")
+        }
+
+        if (isMounted) {
+          setCadeiras(data)
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : "Falha ao carregar cadeiras.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadCadeiras()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const filteredCadeiras = cadeiras.filter(
     (cadeira) =>
       cadeira.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cadeira.curso.toLowerCase().includes(searchTerm.toLowerCase())
@@ -106,7 +85,12 @@ export default function CadeirasPage() {
         </Button>
       </PageHeader>
 
-      {/* Search */}
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="pt-6">
           <div className="relative max-w-md">
@@ -121,74 +105,78 @@ export default function CadeirasPage() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead className="text-right">Horas de Contacto</TableHead>
-                <TableHead>Curso</TableHead>
-                <TableHead className="text-center">Ano</TableHead>
-                <TableHead className="text-center">Semestre</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCadeiras.length === 0 ? (
+          {isLoading ? (
+            <div className="flex h-32 items-center justify-center text-muted-foreground">
+              <Spinner className="mr-2" />
+              A carregar cadeiras...
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Nenhuma cadeira encontrada
-                  </TableCell>
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="text-right">Horas de Contacto</TableHead>
+                  <TableHead>Curso</TableHead>
+                  <TableHead className="text-center">Ano</TableHead>
+                  <TableHead className="text-center">Semestre</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
-              ) : (
-                filteredCadeiras.map((cadeira) => (
-                  <TableRow key={cadeira.id}>
-                    <TableCell className="font-medium">
-                      {cadeira.nome}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="font-medium">{cadeira.horas_contacto}</span>
-                      <span className="text-muted-foreground">h</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {cadeira.curso}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline">{cadeira.ano}o</Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary">{cadeira.semestre}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Abrir menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/cadeiras/${cadeira.id}`}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Editar
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              </TableHeader>
+              <TableBody>
+                {filteredCadeiras.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      Nenhuma cadeira encontrada
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredCadeiras.map((cadeira) => (
+                    <TableRow key={cadeira.id}>
+                      <TableCell className="font-medium">
+                        {cadeira.nome}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="font-medium">{cadeira.horas_contacto}</span>
+                        <span className="text-muted-foreground">h</span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {cadeira.curso?.nome ?? "N/A"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">{cadeira.ano}o</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{cadeira.semestre}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Abrir menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-muted-foreground" disabled>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edicao em breve
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-muted-foreground" disabled>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminacao em breve
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

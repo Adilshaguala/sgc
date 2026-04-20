@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { PageHeader } from "@/components/shared/page-header"
 import { NivelBadge } from "@/components/shared/status-badge"
@@ -40,54 +40,11 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
 import { ArrowLeft, ArrowRight, Plus, Trash2, Check, Calculator, Lightbulb } from "lucide-react"
 import Link from "next/link"
-import type { Docente, Cadeira, NivelAcademico } from "@/types"
-
-// Mock data
-const mockDocentes: Docente[] = [
-  { id: "1", nome_completo: "Joao Manuel Silva", bi_numero: "123456789M", nuit: "100234567", nivel_academico: "mestre", nacionalidade: "mocambicana", categoria: "Assistente Universitario", email: "joao@upm.ac.mz", created_at: "" },
-  { id: "2", nome_completo: "Maria Helena Costa", bi_numero: "987654321M", nuit: "100987654", nivel_academico: "doutorado", nacionalidade: "mocambicana", categoria: "Professor Associado", email: "maria@upm.ac.mz", created_at: "" },
-  { id: "3", nome_completo: "Pedro Antonio Nunes", bi_numero: "456789123M", nuit: "100456789", nivel_academico: "licenciado", nacionalidade: "mocambicana", categoria: "Monitor", email: "pedro@upm.ac.mz", created_at: "" },
-]
-
-const mockCadeiras: Cadeira[] = [
-  { id: "1", nome: "Introducao a Programacao", horas_contacto: 64, curso: "Licenciatura em Informatica", ano: 1, semestre: "I", created_at: "" },
-  { id: "2", nome: "Estruturas de Dados", horas_contacto: 48, curso: "Licenciatura em Informatica", ano: 2, semestre: "I", created_at: "" },
-  { id: "3", nome: "Programacao Web", horas_contacto: 64, curso: "Licenciatura em Informatica", ano: 3, semestre: "II", created_at: "" },
-  { id: "4", nome: "Base de Dados", horas_contacto: 48, curso: "Licenciatura em Informatica", ano: 2, semestre: "II", created_at: "" },
-  { id: "5", nome: "Didactica Geral", horas_contacto: 48, curso: "Licenciatura em Educacao", ano: 1, semestre: "I e II", created_at: "" },
-]
-
-const mockCentros = [
-  { id: "1", nome: "Lhanguene", is_campus_principal: true },
-  { id: "2", nome: "UP-Sede", is_campus_principal: false },
-  { id: "3", nome: "UP-Beira", is_campus_principal: false },
-  { id: "4", nome: "UP-Nampula", is_campus_principal: false },
-  { id: "5", nome: "UP-Quelimane", is_campus_principal: false },
-]
-
-const mockAssinantes = [
-  { id: "1", nome_completo: "Ana Maria Santos", titulo: "Profa. Doutora", cargo: "Vice-Reitora de Administracao e Recursos" },
-  { id: "2", nome_completo: "Jose Pedro Macamo", titulo: "Prof. Doutor", cargo: "Director do CEAD" },
-]
-
-const mockDepartamentos = [
-  { id: "1", nome: "Centro de Educacao Aberta e a Distancia", sigla: "CEAD" },
-  { id: "2", nome: "Faculdade de Ciencias Naturais e Matematica", sigla: "FCNM" },
-]
-
-// Mock historical cadeiras for suggestions
-const mockDocenteHistorico: Record<string, string[]> = {
-  "1": ["1", "2"], // Joao already taught these cadeiras
-  "2": ["3", "4"],
-}
-
-const valorPorNivel: Record<NivelAcademico, number> = {
-  licenciado: 900,
-  mestre: 1100,
-  doutorado: 1400,
-}
+import type { Cadeira, ContratoFormOptions, Docente, NivelAcademico } from "@/types"
+import { toast } from "sonner"
 
 interface CadeiraContrato {
   cadeira_id: string
@@ -101,19 +58,20 @@ export default function NovoContratoPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true)
   const [addCadeiraOpen, setAddCadeiraOpen] = useState(false)
+  const [options, setOptions] = useState<ContratoFormOptions | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  // Step 1 data
   const [formData, setFormData] = useState({
     numero_processo: "",
     docente_id: "",
     assinante_id: "",
     departamento_id: "",
-    ano_lectivo: "2026",
+    ano_lectivo: String(new Date().getFullYear()),
     data_contrato: new Date().toISOString().split("T")[0],
   })
 
-  // Step 2 data
   const [cadeirasContrato, setCadeirasContrato] = useState<CadeiraContrato[]>([])
   const [novaCadeira, setNovaCadeira] = useState({
     cadeira_id: "",
@@ -121,68 +79,167 @@ export default function NovoContratoPage() {
     horas_override: "",
   })
 
-  const selectedDocente = mockDocentes.find((d) => d.id === formData.docente_id)
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadOptions() {
+      try {
+        const response = await fetch("/api/contratos/options")
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Falha ao carregar opcoes do contrato.")
+        }
+
+        if (isMounted) {
+          setOptions(data)
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : "Falha ao carregar opcoes do contrato.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingOptions(false)
+        }
+      }
+    }
+
+    void loadOptions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const selectedDocente = options?.docentes.find((docente) => docente.id === formData.docente_id)
   const docenteSugestoes = selectedDocente
-    ? mockDocenteHistorico[selectedDocente.id]?.map((id) =>
-        mockCadeiras.find((c) => c.id === id)
-      ).filter(Boolean) as Cadeira[]
+    ? (options?.docenteHistorico[selectedDocente.id] ?? [])
+        .map((id) => options?.cadeiras.find((cadeira) => cadeira.id === id))
+        .filter(Boolean) as Cadeira[]
     : []
 
-  // Calculations
+  const valorPorNivel = new Map(
+    (options?.tabelaSalarial ?? []).map((item) => [item.nivel_academico, item])
+  )
+
   const totalHoras = cadeirasContrato.reduce((sum, cc) => {
     const horas = cc.horas_override || cc.cadeira.horas_contacto
     return sum + horas
   }, 0)
 
-  const valorHora = selectedDocente ? valorPorNivel[selectedDocente.nivel_academico] : 0
+  const tabelaDocente = selectedDocente
+    ? valorPorNivel.get(selectedDocente.nivel_academico as NivelAcademico)
+    : undefined
+  const valorHora = tabelaDocente?.valor_hora_mt ?? 0
   const valorBruto = totalHoras * valorHora
-  const bonusConectividade = valorBruto * 0.25
+  const bonusConectividade = valorBruto * ((tabelaDocente?.bonus_conectividade_pct ?? 0) / 100)
 
   const handleAddCadeira = () => {
-    const cadeira = mockCadeiras.find((c) => c.id === novaCadeira.cadeira_id)
-    const centro = mockCentros.find((c) => c.id === novaCadeira.centro_recursos_id)
+    const cadeira = options?.cadeiras.find((item) => item.id === novaCadeira.cadeira_id)
+    const centro = options?.centros.find((item) => item.id === novaCadeira.centro_recursos_id)
 
-    if (cadeira && centro) {
-      setCadeirasContrato([
-        ...cadeirasContrato,
-        {
-          cadeira_id: cadeira.id,
-          cadeira,
-          centro_recursos_id: centro.id,
-          centro_recursos_nome: centro.nome,
-          horas_override: novaCadeira.horas_override
-            ? parseInt(novaCadeira.horas_override)
-            : undefined,
-        },
-      ])
-      setNovaCadeira({ cadeira_id: "", centro_recursos_id: "", horas_override: "" })
-      setAddCadeiraOpen(false)
+    if (!cadeira || !centro) {
+      return
     }
+
+    setCadeirasContrato([
+      ...cadeirasContrato,
+      {
+        cadeira_id: cadeira.id,
+        cadeira,
+        centro_recursos_id: centro.id,
+        centro_recursos_nome: centro.nome,
+        horas_override: novaCadeira.horas_override
+          ? parseInt(novaCadeira.horas_override, 10)
+          : undefined,
+      },
+    ])
+    setNovaCadeira({ cadeira_id: "", centro_recursos_id: "", horas_override: "" })
+    setAddCadeiraOpen(false)
   }
 
   const handleRemoveCadeira = (index: number) => {
-    setCadeirasContrato(cadeirasContrato.filter((_, i) => i !== index))
+    setCadeirasContrato(cadeirasContrato.filter((_, currentIndex) => currentIndex !== index))
   }
 
   const handleAddSugestao = (cadeira: Cadeira) => {
-    if (!cadeirasContrato.find((cc) => cc.cadeira_id === cadeira.id)) {
-      setCadeirasContrato([
-        ...cadeirasContrato,
-        {
-          cadeira_id: cadeira.id,
-          cadeira,
-          centro_recursos_id: mockCentros[0].id,
-          centro_recursos_nome: mockCentros[0].nome,
-        },
-      ])
+    const centroPrincipal = options?.centros.find((item) => item.is_campus_principal) ?? options?.centros[0]
+
+    if (!centroPrincipal || cadeirasContrato.find((item) => item.cadeira_id === cadeira.id)) {
+      return
     }
+
+    setCadeirasContrato([
+      ...cadeirasContrato,
+      {
+        cadeira_id: cadeira.id,
+        cadeira,
+        centro_recursos_id: centroPrincipal.id,
+        centro_recursos_nome: centroPrincipal.nome,
+      },
+    ])
   }
 
   const handleSubmit = async (asSave: boolean = false) => {
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
-    router.push("/contratos")
+
+    try {
+      const response = await fetch("/api/contratos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          estado: asSave ? "rascunho" : "gerado",
+          cadeiras: cadeirasContrato.map((cadeira) => ({
+            cadeira_id: cadeira.cadeira_id,
+            centro_recursos_id: cadeira.centro_recursos_id,
+            horas_override: cadeira.horas_override,
+          })),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao guardar contrato.")
+      }
+
+      toast.success(asSave ? "Contrato guardado como rascunho." : "Contrato criado com sucesso.")
+      router.push(`/contratos/${data.id}`)
+      router.refresh()
+    } catch (submitError) {
+      toast.error(submitError instanceof Error ? submitError.message : "Falha ao guardar contrato.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoadingOptions) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Novo Contrato"
+          description="Criar um novo contrato de tutoria"
+        >
+          <Button variant="outline" asChild>
+            <Link href="/contratos">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar
+            </Link>
+          </Button>
+        </PageHeader>
+
+        <Card>
+          <CardContent className="flex h-32 items-center justify-center text-muted-foreground">
+            <Spinner className="mr-2" />
+            A carregar opcoes do contrato...
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -199,7 +256,12 @@ export default function NovoContratoPage() {
         </Button>
       </PageHeader>
 
-      {/* Stepper */}
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-center gap-4">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center gap-2">
@@ -222,7 +284,6 @@ export default function NovoContratoPage() {
         ))}
       </div>
 
-      {/* Step 1: Identification */}
       {step === 1 && (
         <Card>
           <CardHeader>
@@ -271,7 +332,7 @@ export default function NovoContratoPage() {
                     <SelectValue placeholder="Seleccione o docente" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockDocentes.map((docente) => (
+                    {options?.docentes.map((docente) => (
                       <SelectItem key={docente.id} value={docente.id}>
                         {docente.nome_completo}
                       </SelectItem>
@@ -291,11 +352,11 @@ export default function NovoContratoPage() {
                         </div>
                         <div>
                           <span className="text-muted-foreground">BI:</span>
-                          <p className="font-medium">{selectedDocente.bi_numero}</p>
+                          <p className="font-medium">{selectedDocente.bi_numero || "-"}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">NUIT:</span>
-                          <p className="font-medium">{selectedDocente.nuit}</p>
+                          <p className="font-medium">{selectedDocente.nuit || "-"}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Nivel:</span>
@@ -321,9 +382,9 @@ export default function NovoContratoPage() {
                     <SelectValue placeholder="Seleccione o assinante" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAssinantes.map((assinante) => (
+                    {options?.assinantes.map((assinante) => (
                       <SelectItem key={assinante.id} value={assinante.id}>
-                        {assinante.titulo} {assinante.nome_completo}
+                        {[assinante.titulo, assinante.nome_completo].filter(Boolean).join(" ")}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -342,9 +403,9 @@ export default function NovoContratoPage() {
                     <SelectValue placeholder="Seleccione o departamento" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockDepartamentos.map((dept) => (
+                    {options?.departamentos.map((dept) => (
                       <SelectItem key={dept.id} value={dept.id}>
-                        {dept.sigla} - {dept.nome}
+                        {[dept.sigla, dept.nome].filter(Boolean).join(" - ")}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -377,11 +438,9 @@ export default function NovoContratoPage() {
         </Card>
       )}
 
-      {/* Step 2: Cadeiras */}
       {step === 2 && (
         <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Suggestions */}
+          <div className="space-y-6 lg:col-span-2">
             {docenteSugestoes.length > 0 && (
               <Card>
                 <CardHeader className="pb-3">
@@ -396,9 +455,7 @@ export default function NovoContratoPage() {
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {docenteSugestoes.map((cadeira) => {
-                      const isAdded = cadeirasContrato.some(
-                        (cc) => cc.cadeira_id === cadeira.id
-                      )
+                      const isAdded = cadeirasContrato.some((cc) => cc.cadeira_id === cadeira.id)
                       return (
                         <Button
                           key={cadeira.id}
@@ -417,7 +474,6 @@ export default function NovoContratoPage() {
               </Card>
             )}
 
-            {/* Added Cadeiras */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -454,7 +510,7 @@ export default function NovoContratoPage() {
                               <SelectValue placeholder="Seleccione a cadeira" />
                             </SelectTrigger>
                             <SelectContent>
-                              {mockCadeiras.map((cadeira) => (
+                              {options?.cadeiras.map((cadeira) => (
                                 <SelectItem key={cadeira.id} value={cadeira.id}>
                                   {cadeira.nome} ({cadeira.horas_contacto}h)
                                 </SelectItem>
@@ -474,7 +530,7 @@ export default function NovoContratoPage() {
                               <SelectValue placeholder="Seleccione o centro" />
                             </SelectTrigger>
                             <SelectContent>
-                              {mockCentros.map((centro) => (
+                              {options?.centros.map((centro) => (
                                 <SelectItem key={centro.id} value={centro.id}>
                                   {centro.nome}
                                   {centro.is_campus_principal && " (Campus Principal)"}
@@ -533,7 +589,7 @@ export default function NovoContratoPage() {
                     </TableHeader>
                     <TableBody>
                       {cadeirasContrato.map((cc, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={`${cc.cadeira_id}-${index}`}>
                           <TableCell className="font-medium">{cc.cadeira.nome}</TableCell>
                           <TableCell className="text-right">
                             {cc.horas_override || cc.cadeira.horas_contacto}h
@@ -567,7 +623,6 @@ export default function NovoContratoPage() {
             </Card>
           </div>
 
-          {/* Financial Summary */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -591,7 +646,9 @@ export default function NovoContratoPage() {
                   <MoneyDisplay value={valorBruto} className="font-medium" />
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Bonus Conectividade (25%)</span>
+                  <span className="text-muted-foreground">
+                    Bonus Conectividade ({tabelaDocente?.bonus_conectividade_pct ?? 0}%)
+                  </span>
                   <MoneyDisplay value={bonusConectividade} />
                 </div>
                 <Separator />
@@ -606,17 +663,11 @@ export default function NovoContratoPage() {
             </Card>
 
             <div className="flex flex-col gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setStep(1)}
-              >
+              <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Anterior
               </Button>
-              <Button
-                onClick={() => setStep(3)}
-                disabled={cadeirasContrato.length === 0}
-              >
+              <Button onClick={() => setStep(3)} disabled={cadeirasContrato.length === 0}>
                 Proximo
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -625,7 +676,6 @@ export default function NovoContratoPage() {
         </div>
       )}
 
-      {/* Step 3: Review */}
       {step === 3 && (
         <div className="space-y-6">
           <Card>
@@ -636,7 +686,6 @@ export default function NovoContratoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Contract Info */}
               <div>
                 <h3 className="mb-3 font-medium">Informacoes do Contrato</h3>
                 <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-3">
@@ -657,7 +706,6 @@ export default function NovoContratoPage() {
                 </div>
               </div>
 
-              {/* Docente Info */}
               {selectedDocente && (
                 <div>
                   <h3 className="mb-3 font-medium">Docente</h3>
@@ -668,11 +716,11 @@ export default function NovoContratoPage() {
                     </div>
                     <div>
                       <span className="text-sm text-muted-foreground">BI</span>
-                      <p className="font-medium">{selectedDocente.bi_numero}</p>
+                      <p className="font-medium">{selectedDocente.bi_numero || "-"}</p>
                     </div>
                     <div>
                       <span className="text-sm text-muted-foreground">NUIT</span>
-                      <p className="font-medium">{selectedDocente.nuit}</p>
+                      <p className="font-medium">{selectedDocente.nuit || "-"}</p>
                     </div>
                     <div>
                       <span className="text-sm text-muted-foreground">Nivel</span>
@@ -684,7 +732,6 @@ export default function NovoContratoPage() {
                 </div>
               )}
 
-              {/* Cadeiras */}
               <div>
                 <h3 className="mb-3 font-medium">Cadeiras ({cadeirasContrato.length})</h3>
                 <div className="rounded-lg border">
@@ -699,7 +746,7 @@ export default function NovoContratoPage() {
                     </TableHeader>
                     <TableBody>
                       {cadeirasContrato.map((cc, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={`${cc.cadeira_id}-${index}`}>
                           <TableCell className="font-medium">{cc.cadeira.nome}</TableCell>
                           <TableCell className="text-right">
                             {cc.horas_override || cc.cadeira.horas_contacto}h
@@ -715,7 +762,6 @@ export default function NovoContratoPage() {
                 </div>
               </div>
 
-              {/* Financial Summary */}
               <div>
                 <h3 className="mb-3 font-medium">Resumo Financeiro</h3>
                 <div className="grid gap-4 rounded-lg border bg-muted/50 p-4 sm:grid-cols-4">

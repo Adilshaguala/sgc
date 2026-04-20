@@ -1,9 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { PageHeader } from "@/components/shared/page-header"
-import { NivelBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,87 +28,121 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Spinner } from "@/components/ui/spinner"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
+import type { Docente, DocenteHistoricoItem, NivelAcademico } from "@/types"
+import { toast } from "sonner"
 
-// Mock data for docente
-const mockDocente = {
-  id: "1",
-  nome_completo: "Joao Manuel Silva",
-  bi_numero: "123456789M",
-  nuit: "100234567",
-  nivel_academico: "mestre",
-  nacionalidade: "mocambicana",
-  categoria: "Assistente Universitario",
-  email: "joao.silva@upm.ac.mz",
-  telefone: "+258 84 123 4567",
-  created_at: "2025-06-15",
+type DocenteFormState = {
+  nome_completo: string
+  bi_numero: string
+  nuit: string
+  nivel_academico: NivelAcademico
+  nacionalidade: string
+  categoria: string
+  email: string
+  telefone: string
 }
 
-// Mock historical data
-const mockHistorico = [
-  {
-    id: "1",
-    cadeira: "Introducao a Programacao",
-    curso: "Informatica",
-    ano_lectivo: "2025",
-    numero_contrato: "PRC/SC/PS/2025/145",
-    horas: 64,
-  },
-  {
-    id: "2",
-    cadeira: "Estruturas de Dados",
-    curso: "Informatica",
-    ano_lectivo: "2025",
-    numero_contrato: "PRC/SC/PS/2025/145",
-    horas: 48,
-  },
-  {
-    id: "3",
-    cadeira: "Programacao Web",
-    curso: "Informatica",
-    ano_lectivo: "2024",
-    numero_contrato: "PRC/SC/PS/2024/089",
-    horas: 64,
-  },
-  {
-    id: "4",
-    cadeira: "Base de Dados",
-    curso: "Informatica",
-    ano_lectivo: "2024",
-    numero_contrato: "PRC/SC/PS/2024/089",
-    horas: 48,
-  },
-]
+function buildFormData(docente: Docente): DocenteFormState {
+  return {
+    nome_completo: docente.nome_completo,
+    bi_numero: docente.bi_numero || "",
+    nuit: docente.nuit || "",
+    nivel_academico: docente.nivel_academico,
+    nacionalidade: docente.nacionalidade,
+    categoria: docente.categoria || "",
+    email: docente.email || "",
+    telefone: docente.telefone || "",
+  }
+}
 
 export default function EditarDocentePage() {
   const router = useRouter()
-  const params = useParams()
+  const params = useParams<{ id: string }>()
+  const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
-    nome_completo: mockDocente.nome_completo,
-    bi_numero: mockDocente.bi_numero,
-    nuit: mockDocente.nuit,
-    nivel_academico: mockDocente.nivel_academico,
-    nacionalidade: mockDocente.nacionalidade,
-    categoria: mockDocente.categoria,
-    email: mockDocente.email,
-    telefone: mockDocente.telefone,
-  })
+  const [error, setError] = useState<string | null>(null)
+  const [docente, setDocente] = useState<Docente | null>(null)
+  const [historico, setHistorico] = useState<DocenteHistoricoItem[]>([])
+  const [formData, setFormData] = useState<DocenteFormState | null>(null)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadDocente() {
+      try {
+        const response = await fetch(`/api/docentes/${params.id}`)
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Falha ao carregar docente.")
+        }
+
+        if (isMounted) {
+          setDocente(data.docente)
+          setHistorico(data.historico)
+          setFormData(buildFormData(data.docente))
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : "Falha ao carregar docente.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadDocente()
+
+    return () => {
+      isMounted = false
+    }
+  }, [params.id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData) {
+      return
+    }
+
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
-    router.push("/docentes")
+
+    try {
+      const response = await fetch(`/api/docentes/${params.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao actualizar docente.")
+      }
+
+      setDocente(data)
+      setFormData(buildFormData(data))
+      toast.success("Docente actualizado com sucesso.")
+      router.refresh()
+    } catch (submitError) {
+      toast.error(submitError instanceof Error ? submitError.message : "Falha ao actualizar docente.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Editar Docente"
-        description={mockDocente.nome_completo}
+        description={docente?.nome_completo || "Carregando docente"}
       >
         <Button variant="outline" asChild>
           <Link href="/docentes">
@@ -119,170 +152,194 @@ export default function EditarDocentePage() {
         </Button>
       </PageHeader>
 
-      <Tabs defaultValue="dados" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="dados">Dados do Docente</TabsTrigger>
-          <TabsTrigger value="historico">Historico de Cadeiras</TabsTrigger>
-        </TabsList>
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="dados">
-          <form onSubmit={handleSubmit}>
+      {isLoading || !formData ? (
+        <Card>
+          <CardContent className="flex h-32 items-center justify-center text-muted-foreground">
+            <Spinner className="mr-2" />
+            A carregar docente...
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="dados" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="dados">Dados do Docente</TabsTrigger>
+            <TabsTrigger value="historico">Historico de Cadeiras</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dados">
+            <form onSubmit={handleSubmit}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informacoes do Docente</CardTitle>
+                  <CardDescription>
+                    Actualize os dados do docente. Campos marcados com * sao obrigatorios.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FieldGroup className="grid gap-6 sm:grid-cols-2">
+                    <Field className="sm:col-span-2">
+                      <FieldLabel>Nome Completo *</FieldLabel>
+                      <Input
+                        value={formData.nome_completo}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nome_completo: e.target.value })
+                        }
+                        placeholder="Nome completo do docente"
+                        required
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Numero do BI</FieldLabel>
+                      <Input
+                        value={formData.bi_numero}
+                        onChange={(e) =>
+                          setFormData({ ...formData, bi_numero: e.target.value })
+                        }
+                        placeholder="Ex: 123456789M"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>NUIT</FieldLabel>
+                      <Input
+                        value={formData.nuit}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nuit: e.target.value })
+                        }
+                        placeholder="Ex: 100234567"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Nivel Academico *</FieldLabel>
+                      <Select
+                        value={formData.nivel_academico}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, nivel_academico: value as NivelAcademico })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione o nivel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="licenciado">Licenciado</SelectItem>
+                          <SelectItem value="mestre">Mestre</SelectItem>
+                          <SelectItem value="doutorado">Doutorado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Nacionalidade</FieldLabel>
+                      <Input
+                        value={formData.nacionalidade}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nacionalidade: e.target.value })
+                        }
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Categoria</FieldLabel>
+                      <Input
+                        value={formData.categoria}
+                        onChange={(e) =>
+                          setFormData({ ...formData, categoria: e.target.value })
+                        }
+                        placeholder="Ex: Assistente Universitario"
+                      />
+                      <FieldDescription>Categoria profissional do docente</FieldDescription>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Email</FieldLabel>
+                      <Input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Telefone</FieldLabel>
+                      <Input
+                        value={formData.telefone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, telefone: e.target.value })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+
+                  <div className="mt-8 flex justify-end gap-4">
+                    <Button type="button" variant="outline" asChild>
+                      <Link href="/docentes">Cancelar</Link>
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      <Save className="mr-2 h-4 w-4" />
+                      {isSubmitting ? "A guardar..." : "Guardar"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="historico">
             <Card>
               <CardHeader>
-                <CardTitle>Informacoes do Docente</CardTitle>
+                <CardTitle>Historico de Cadeiras</CardTitle>
                 <CardDescription>
-                  Actualize os dados do docente. Campos marcados com * sao obrigatorios.
+                  Cadeiras leccionadas pelo docente em contratos anteriores
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <FieldGroup className="grid gap-6 sm:grid-cols-2">
-                  <Field className="sm:col-span-2">
-                    <FieldLabel>Nome Completo *</FieldLabel>
-                    <Input
-                      value={formData.nome_completo}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nome_completo: e.target.value })
-                      }
-                      placeholder="Nome completo do docente"
-                      required
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Numero do BI</FieldLabel>
-                    <Input
-                      value={formData.bi_numero}
-                      onChange={(e) =>
-                        setFormData({ ...formData, bi_numero: e.target.value })
-                      }
-                      placeholder="Ex: 123456789M"
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>NUIT</FieldLabel>
-                    <Input
-                      value={formData.nuit}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nuit: e.target.value })
-                      }
-                      placeholder="Ex: 100234567"
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Nivel Academico *</FieldLabel>
-                    <Select
-                      value={formData.nivel_academico}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, nivel_academico: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione o nivel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="licenciado">Licenciado</SelectItem>
-                        <SelectItem value="mestre">Mestre</SelectItem>
-                        <SelectItem value="doutorado">Doutorado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Nacionalidade</FieldLabel>
-                    <Input
-                      value={formData.nacionalidade}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nacionalidade: e.target.value })
-                      }
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Categoria</FieldLabel>
-                    <Input
-                      value={formData.categoria}
-                      onChange={(e) =>
-                        setFormData({ ...formData, categoria: e.target.value })
-                      }
-                      placeholder="Ex: Assistente Universitario"
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Email</FieldLabel>
-                    <Input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Telefone</FieldLabel>
-                    <Input
-                      value={formData.telefone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, telefone: e.target.value })
-                      }
-                    />
-                  </Field>
-                </FieldGroup>
-
-                <div className="mt-8 flex justify-end gap-4">
-                  <Button type="button" variant="outline" asChild>
-                    <Link href="/docentes">Cancelar</Link>
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isSubmitting ? "A guardar..." : "Guardar"}
-                  </Button>
-                </div>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cadeira</TableHead>
+                      <TableHead>Curso</TableHead>
+                      <TableHead>Ano Lectivo</TableHead>
+                      <TableHead>N Contrato</TableHead>
+                      <TableHead className="text-right">Horas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historico.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          Ainda nao existem cadeiras associadas a este docente
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      historico.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.cadeira}</TableCell>
+                          <TableCell className="text-muted-foreground">{item.curso}</TableCell>
+                          <TableCell>{item.ano_lectivo}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.numero_contrato}
+                          </TableCell>
+                          <TableCell className="text-right">{item.horas}h</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
-          </form>
-        </TabsContent>
-
-        <TabsContent value="historico">
-          <Card>
-            <CardHeader>
-              <CardTitle>Historico de Cadeiras</CardTitle>
-              <CardDescription>
-                Cadeiras leccionadas pelo docente em contratos anteriores
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cadeira</TableHead>
-                    <TableHead>Curso</TableHead>
-                    <TableHead>Ano Lectivo</TableHead>
-                    <TableHead>N Contrato</TableHead>
-                    <TableHead className="text-right">Horas</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mockHistorico.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.cadeira}</TableCell>
-                      <TableCell className="text-muted-foreground">{item.curso}</TableCell>
-                      <TableCell>{item.ano_lectivo}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.numero_contrato}
-                      </TableCell>
-                      <TableCell className="text-right">{item.horas}h</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   )
 }

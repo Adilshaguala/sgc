@@ -9,7 +9,7 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "lint": "eslint",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "latest",
@@ -18,12 +18,16 @@
     "class-variance-authority": "latest",
     "clsx": "^2.1.1",
     "date-fns": "4.1.0",
+    "docxtemplater": "^3.68.5",
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.8.0",
-    "next": "16.1.6",
+    "mongoose": "^9.4.1",
+    "next": "^16.2.4",
     "next-themes": "latest",
+    "pizzip": "^3.2.0",
+    "puppeteer": "^24.41.0",
     "radix-ui": "latest",
     "react": "^19.2.4",
     "react-day-picker": "9.8.0",

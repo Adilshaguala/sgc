@@ -18,10 +18,10 @@ import {
   FieldGroup,
   FieldLabel,
   FieldDescription,
-  FieldError,
 } from "@/components/ui/field"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function NovoDocentePage() {
   const router = useRouter()
@@ -40,10 +40,29 @@ export default function NovoDocentePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
-    router.push("/docentes")
+    try {
+      const response = await fetch("/api/docentes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao guardar docente.")
+      }
+
+      toast.success("Docente guardado com sucesso.")
+      router.push("/docentes")
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao guardar docente.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (

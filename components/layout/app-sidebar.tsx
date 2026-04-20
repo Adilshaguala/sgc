@@ -88,6 +88,11 @@ const configNavItems = [
     icon: MapPin,
   },
   {
+    title: "Cursos",
+    href: "/configuracoes/cursos",
+    icon: BookOpen,
+  },
+  {
     title: "Tabela Salarial",
     href: "/configuracoes/tabela-salarial",
     icon: DollarSign,

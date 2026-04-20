@@ -26,6 +26,7 @@ export interface Assinante {
   titulo?: string
   cargo: string
   departamento_id?: string
+  departamento_nome?: string
   departamento?: Departamento
   assinatura_url?: string
   activo: boolean
@@ -36,6 +37,15 @@ export interface CentroRecursos {
   id: string
   nome: string
   is_campus_principal: boolean
+  created_at: string
+}
+
+export interface Curso {
+  id: string
+  nome: string
+  duracao_anos: number
+  centro_recursos_id: string
+  centro_recursos?: CentroRecursos
   created_at: string
 }
 
@@ -57,7 +67,8 @@ export interface Cadeira {
   id: string
   nome: string
   horas_contacto: number
-  curso: string
+  curso_id: string
+  curso?: Curso
   ano: number
   semestre: Semestre
   created_at: string
@@ -94,6 +105,7 @@ export interface Contrato {
   total_horas?: number
   valor_hora_mt?: number
   valor_total_bruto?: number
+  bonus_conectividade_pct?: number
   estado: EstadoContrato
   data_visto_ta?: string
   numero_visto_ta?: string
@@ -132,6 +144,7 @@ export interface ContratoFormData {
   departamento_id: string
   ano_lectivo: string
   data_contrato: string
+  estado?: EstadoContrato
   cadeiras: {
     cadeira_id: string
     centro_recursos_id: string
@@ -145,4 +158,34 @@ export interface DashboardStats {
   contratosPendentes: number
   docentesActivos: number
   cadeirasCadastradas: number
+}
+
+export interface DashboardChartItem {
+  estado: string
+  count: number
+}
+
+export interface DashboardData {
+  stats: DashboardStats
+  recentContratos: Partial<Contrato>[]
+  chartData: DashboardChartItem[]
+}
+
+export interface DocenteHistoricoItem {
+  id: string
+  cadeira: string
+  curso: string
+  ano_lectivo: string
+  numero_contrato: string
+  horas: number
+}
+
+export interface ContratoFormOptions {
+  docentes: Docente[]
+  cadeiras: Cadeira[]
+  centros: CentroRecursos[]
+  assinantes: Assinante[]
+  departamentos: Departamento[]
+  tabelaSalarial: TabelaSalario[]
+  docenteHistorico: Record<string, string[]>
 }
